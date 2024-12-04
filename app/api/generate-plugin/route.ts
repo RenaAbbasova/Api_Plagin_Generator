@@ -1,195 +1,315 @@
-import { NextRequest, NextResponse } from 'next/server'
-import archiver from 'archiver'
+import { NextRequest, NextResponse } from 'next/server';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import archiver from 'archiver';
 
 export async function POST(req: NextRequest) {
-  const data = await req.json()
-  const { platform, pluginName, description, apiUrl, apiMethod, apiKey, visualizeData } = data
+  const data = await req.json();
+  const { platform, pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData } = data;
 
-  const archive = archiver('zip', {
-    zlib: { level: 9 },
-  })
+  // Create a temporary directory
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'plugin-'));
 
-  const chunks: Uint8Array[] = []
-  archive.on('data', (chunk) => chunks.push(chunk))
+  try {
+    // Generate plugin files based on the platform
+    switch (platform) {
+      case 'wordpress':
+        generateWordPressPlugin(tempDir, { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData });
+        break;
+      case 'chrome':
+        generateChromeExtension(tempDir, { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData });
+        break;
+      case 'firefox':
+        generateFirefoxExtension(tempDir, { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData });
+        break;
+      default:
+        throw new Error('Invalid platform');
+    }
 
-  const files = generatePluginFiles(platform, { pluginName, description, apiUrl, apiMethod, apiKey, visualizeData })
+    // Create a zip file
+    const zipFilePath = path.join(os.tmpdir(), `${pluginName}.zip`);
+    await createZipFile(tempDir, zipFilePath);
 
-  for (const [filename, content] of Object.entries(files)) {
-    archive.append(content, { name: filename })
+    // Read the zip file
+    const zipFileContent = fs.readFileSync(zipFilePath);
+
+    // Clean up temporary files
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.unlinkSync(zipFilePath);
+
+    // Send the zip file as a response
+    return new NextResponse(zipFileContent, {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${pluginName}.zip"`,
+      },
+    });
+  } catch (error) {
+    console.error('Error generating plugin:', error);
+    return NextResponse.json({ error: 'Failed to generate plugin' }, { status: 500 });
   }
-
-  // Add installation instructions
-  const instructions = generateInstructions(platform, pluginName)
-  archive.append(instructions, { name: 'INSTALL.md' })
-
-  await archive.finalize()
-
-  const zipBuffer = Buffer.concat(chunks)
-
-  return new NextResponse(zipBuffer, {
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${pluginName}.zip"`,
-    },
-  })
 }
 
-function generatePluginFiles(platform: string, data: any) {
-  const files: Record<string, string> = {}
-
-  if (platform === 'wordpress') {
-    files['plugin.php'] = `
+function generateWordPressPlugin(dir: string, data: any) {
+  const { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData } = data;
+  const pluginFile = `
 <?php
-/*
-Plugin Name: ${data.pluginName}
-Description: ${data.description}
-Version: 1.0
-Author: Generated Plugin
-*/
+/**
+ * Plugin Name: ${pluginName}
+ * Description: ${description}
+ * Version: 1.0
+ * Author: API Plugin Generator
+ */
 
-function call_api() {
-    $api_url = "${data.apiUrl}";
-    $api_key = "${data.apiKey}";
-
-    $response = wp_remote_${data.apiMethod.toLowerCase()}($api_url, array(
-        'headers' => array(
-            'Authorization' => 'Bearer ' . $api_key,
-        ),
-    ));
-
-    $body = wp_remote_retrieve_body($response);
-    
-    if (${data.visualizeData}) {
-        return visualize_data($body);
-    }
-    
-    return $body;
-}
-
-function visualize_data($data) {
-    $json_data = json_decode($data, true);
-    $output = '<div class="api-data-visualization">';
-    
-    foreach ($json_data as $key => $value) {
-        $output .= "<p><strong>$key:</strong> $value</p>";
-    }
-    
-    $output .= '</div>';
-    return $output;
-}
-
-add_shortcode('api_data', 'call_api');
-`
-  } else if (platform === 'chrome' || platform === 'firefox') {
-    files['manifest.json'] = `
-{
-  "manifest_version": ${platform === 'chrome' ? 3 : 2},
-  "name": "${data.pluginName}",
-  "version": "1.0",
-  "description": "${data.description}",
-  ${platform === 'chrome' ? '"background": { "service_worker": "background.js" },' : '"background": { "scripts": ["background.js"] },'}
-  "permissions": ["storage", "${data.apiUrl}"]
-}
-`
-
-    files['background.js'] = `
-console.log('Background script for ${data.pluginName} running!');
-
-function callApi() {
-  fetch("${data.apiUrl}", {
-    method: "${data.apiMethod}",
-    headers: {
-      "Authorization": "Bearer ${data.apiKey}",
-    },
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data);
-      ${data.visualizeData ? 'visualizeData(data);' : ''}
-    })
-    .catch(error => console.error('Error:', error));
-}
-
-${data.visualizeData ? `
-function visualizeData(data) {
-  // This is a simple visualization. You might want to use a charting library for more complex visualizations.
-  let visualizationHtml = '<div style="font-family: Arial, sans-serif;">';
-  for (let [key, value] of Object.entries(data)) {
-    visualizationHtml += \`<p><strong>\${key}:</strong> \${value}</p>\`;
+function ${pluginName.toLowerCase().replace(/\s/g, '_')}_fetch_data() {
+  $api_url = '${apiUrl}';
+  $args = array(
+    'headers' => array(
+      'Authorization' => 'Bearer ${apiKey}'
+      ${Object.entries(headers).map(([key, value]) => `,'${key}' => '${value}'`).join('\n      ')}
+    )
+  );
+  
+  $response = wp_remote_${apiMethod.toLowerCase()}($api_url, $args);
+  
+  if (is_wp_error($response)) {
+    return 'Error fetching data';
   }
-  visualizationHtml += '</div>';
-
-  chrome.runtime.sendMessage({action: "updateVisualization", html: visualizationHtml});
+  
+  $body = wp_remote_retrieve_body($response);
+  $data = json_decode($body);
+  
+  return $data;
 }
+
+function ${pluginName.toLowerCase().replace(/\s/g, '_')}_shortcode() {
+  $data = ${pluginName.toLowerCase().replace(/\s/g, '_')}_fetch_data();
+  
+  // Convert data to HTML representation
+  $output = '<div class="api-data">';
+  $output .= '<pre>' . print_r($data, true) . '</pre>';
+  $output .= '</div>';
+  
+  return $output;
+}
+
+add_shortcode('${pluginName.toLowerCase().replace(/\s/g, '_')}', '${pluginName.toLowerCase().replace(/\s/g, '_')}_shortcode');
+
+${visualizeData ? `
+function ${pluginName.toLowerCase().replace(/\s/g, '_')}_visualize_data() {
+  $data = ${pluginName.toLowerCase().replace(/\s/g, '_')}_fetch_data();
+  
+  // Basic visualization example (you may want to customize this based on your data structure)
+  $output = '<div class="api-data-visualization">';
+  $output .= '<h2>API Data Visualization</h2>';
+  
+  if (is_array($data) || is_object($data)) {
+    foreach ($data as $key => $value) {
+      $output .= '<div class="data-item">';
+      $output .= '<strong>' . esc_html($key) . ':</strong> ' . esc_html(print_r($value, true));
+      $output .= '</div>';
+    }
+  } else {
+    $output .= '<p>Unable to visualize data. Please check the API response format.</p>';
+  }
+  
+  $output .= '</div>';
+  
+  return $output;
+}
+
+add_shortcode('${pluginName.toLowerCase().replace(/\s/g, '_')}_visualize', '${pluginName.toLowerCase().replace(/\s/g, '_')}_visualize_data');
 ` : ''}
+`;
 
-callApi();
-`
+  fs.writeFileSync(path.join(dir, `${pluginName.toLowerCase().replace(/\s/g, '-')}.php`), pluginFile);
+}
 
-    if (data.visualizeData) {
-      files['popup.html'] = `
+function generateChromeExtension(dir: string, data: any) {
+  const { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData } = data;
+  
+  const manifestFile = `
+{
+  "manifest_version": 3,
+  "name": "${pluginName}",
+  "version": "1.0",
+  "description": "${description}",
+  "permissions": ["activeTab"],
+  "host_permissions": ["${apiUrl}"],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
+`;
+
+  const popupHtml = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>${data.pluginName}</title>
+  <title>${pluginName}</title>
+  <script src="popup.js"></script>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    ${visualizeData ? `
+    .visualization {
+      margin-top: 20px;
+    }
+    .data-item {
+      margin-bottom: 10px;
+    }
+    ` : ''}
+  </style>
 </head>
 <body>
-  <div id="visualization"></div>
-  <script src="popup.js"></script>
+  <h1>${pluginName}</h1>
+  <div id="result"></div>
+  ${visualizeData ? '<div id="visualization" class="visualization"></div>' : ''}
 </body>
 </html>
-`
+`;
 
-      files['popup.js'] = `
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "updateVisualization") {
-    document.getElementById('visualization').innerHTML = request.html;
-  }
-});
-`
+  const popupJs = `
+document.addEventListener('DOMContentLoaded', function() {
+  fetch('${apiUrl}', {
+    method: '${apiMethod}',
+    headers: {
+      'Authorization': 'Bearer ${apiKey}'
+      ${Object.entries(headers).map(([key, value]) => `,'${key}': '${value}'`).join('\n      ')}
     }
-  }
+  })
+  .then(response => response.json())
+  .then(data => {
+    document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    ${visualizeData ? `
+    // Basic visualization (customize based on your data structure)
+    const visualization = document.getElementById('visualization');
+    visualization.innerHTML = '<h2>Data Visualization</h2>';
+    for (const [key, value] of Object.entries(data)) {
+      const item = document.createElement('div');
+      item.className = 'data-item';
+      item.innerHTML = '<strong>' + key + ':</strong> ' + JSON.stringify(value);
+      visualization.appendChild(item);
+    }
+    ` : ''}
+  })
+  .catch(error => {
+    document.getElementById('result').innerText = 'Error: ' + error.message;
+  });
+});
+`;
 
-  return files
+  fs.writeFileSync(path.join(dir, 'manifest.json'), manifestFile);
+  fs.writeFileSync(path.join(dir, 'popup.html'), popupHtml);
+  fs.writeFileSync(path.join(dir, 'popup.js'), popupJs);
 }
 
-function generateInstructions(platform: string, pluginName: string) {
-  let instructions = `# Installation Instructions for ${pluginName}\n\n`;
-
-  switch (platform) {
-    case 'wordpress':
-      instructions += `
-1. Log in to your WordPress admin panel.
-2. Navigate to Plugins > Add New.
-3. Click on the "Upload Plugin" button at the top of the page.
-4. Click "Choose File" and select the ${pluginName}.zip file.
-5. Click "Install Now".
-6. After installation, click "Activate Plugin".
-7. The plugin is now installed and activated. You can use the [api_data] shortcode in your posts or pages to display the API data.
-`;
-      break;
-    case 'chrome':
-      instructions += `
-1. Open Google Chrome and navigate to chrome://extensions.
-2. Enable "Developer mode" by toggling the switch in the top right corner.
-3. Click on "Load unpacked" button.
-4. Select the folder containing the unzipped ${pluginName} files.
-5. The extension should now appear in your list of installed extensions.
-`;
-      break;
-    case 'firefox':
-      instructions += `
-1. Open Firefox and navigate to about:debugging.
-2. Click on "This Firefox" in the left sidebar.
-3. Click on "Load Temporary Add-on".
-4. Navigate to the folder containing the unzipped ${pluginName} files and select the manifest.json file.
-5. The extension should now be temporarily installed and appear in your list of add-ons.
-
-Note: To permanently install the add-on, you need to submit it to Mozilla for signing.
-`;
-      break;
+function generateFirefoxExtension(dir: string, data: any) {
+  const { pluginName, description, apiUrl, apiMethod, apiKey, headers, visualizeData } = data;
+  
+  const manifestFile = `
+{
+  "manifest_version": 2,
+  "name": "${pluginName}",
+  "version": "1.0",
+  "description": "${description}",
+  "permissions": ["${apiUrl}"],
+  "browser_action": {
+    "default_popup": "popup.html"
   }
-
-  return instructions;
 }
+`;
+
+  const popupHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>${pluginName}</title>
+  <script src="popup.js"></script>
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    ${visualizeData ? `
+    .visualization {
+      margin-top: 20px;
+    }
+    .data-item {
+      margin-bottom: 10px;
+    }
+    ` : ''}
+  </style>
+</head>
+<body>
+  <h1>${pluginName}</h1>
+  <div id="result"></div>
+  ${visualizeData ? '<div id="visualization" class="visualization"></div>' : ''}
+</body>
+</html>
+`;
+
+  const popupJs = `
+document.addEventListener('DOMContentLoaded', function() {
+  fetch('${apiUrl}', {
+    method: '${apiMethod}',
+    headers: {
+      'Authorization': 'Bearer ${apiKey}'
+      ${Object.entries(headers).map(([key, value]) => `,'${key}': '${value}'`).join('\n      ')}
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+    ${visualizeData ? `
+    // Basic visualization (customize based on your data structure)
+    const visualization = document.getElementById('visualization');
+    visualization.innerHTML = '<h2>Data Visualization</h2>';
+    for (const [key, value] of Object.entries(data)) {
+      const item = document.createElement('div');
+      item.className = 'data-item';
+      item.innerHTML = '<strong>' + key + ':</strong> ' + JSON.stringify(value);
+      visualization.appendChild(item);
+    }
+    ` : ''}
+  })
+  .catch(error => {
+    document.getElementById('result').innerText = 'Error: ' + error.message;
+  });
+});
+`;
+
+  fs.writeFileSync(path.join(dir, 'manifest.json'), manifestFile);
+  fs.writeFileSync(path.join(dir, 'popup.html'), popupHtml);
+  fs.writeFileSync(path.join(dir, 'popup.js'), popupJs);
+}
+
+async function createZipFile(sourceDir: string, outputFilePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(outputFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', () => resolve());
+    archive.on('error', err => reject(err));
+
+    archive.pipe(output);
+    archive.directory(sourceDir, false);
+    archive.finalize();
+  });
+}
+
+
 

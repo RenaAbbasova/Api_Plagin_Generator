@@ -1,84 +1,176 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# API Plugin Generator
 
-## Getting Started
+## Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Technology Stack](#technology-stack)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Project Structure](#project-structure)
+- [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The API Plugin Generator is a web application that allows users to easily create plugins for various platforms (WordPress, Chrome Extension, Firefox Extension) that interact with APIs. This tool simplifies the process of generating boilerplate code for plugins, saving developers time and effort.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Support for multiple platforms:
+  - WordPress
+  - Chrome Extension
+  - Firefox Extension
+- Customizable plugin settings:
+  - Plugin Name
+  - Description
+  - API URL
+  - API Method (GET/POST)
+  - API Key
+  - Custom Headers
+- Logo upload functionality for branding your plugin
+- Option to visualize API data
+- API testing feature
+- Generation history tracking
+- Downloadable plugin as a ZIP file
+- Responsive design for use on various devices
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Technology Stack
 
-## Learn More
+- **Frontend**:
+  - Next.js (React framework)
+  - TypeScript
+  - HTML5
+  - CSS3
+  - Vanilla JavaScript (for client-side interactions)
+- **Backend**:
+  - Node.js
+  - Next.js API Routes
+- **File Handling**:
+  - File System (fs) module
+  - Archiver (for ZIP file creation)
 
-To learn more about Next.js, take a look at the following resources:
+## Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/RenaAbbasova/Api_Plagin_Generator
+   cd api-plugin-generator
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-## Deploy on Vercel
+3. Update the `next.config.js` file:
+   ```javascript
+   /** @type {import('next').NextConfig} */
+   const nextConfig = {
+     async rewrites() {
+       return [
+         {
+           source: '/',
+           destination: '/page.html',
+         },
+       ];
+     },
+   }
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+   module.exports = nextConfig
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
+5. Open the application in your browser:
+   ```
+   http://localhost:3000
+   ```
 
-****************************
+## API Reference
 
-To set up and run the server for this project, follow these steps:
+### Generate Plugin
+- **URL**: `/api/generate-plugin`
+- **Method**: `POST`
+- **Request Body**:
+  ```json
+  {
+    "pluginName": "My Plugin",
+    "description": "A sample plugin",
+    "apiUrl": "https://api.example.com",
+    "method": "GET",
+    "apiKey": "your-api-key"
+  }
+  ```
+- **Response**: Returns a ZIP file.
 
-1. First, make sure you have Node.js installed on your computer. You can download it from [https://nodejs.org/](https://nodejs.org/)
-2. Create a new folder for your project and navigate to it in your terminal:
+### Test API
+- **URL**: `/api/test-api`
+- **Method**: `POST`
+- **Request Body**:
+  ```json
+  {
+    "apiUrl": "https://api.example.com",
+    "method": "GET",
+    "headers": {
+      "Authorization": "Bearer your-api-key"
+    }
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "key1": "value1",
+      "key2": "value2"
+    }
+  }
+  ```
 
-mkdir plugin-generator
-cd plugin-generator
+## Troubleshooting
 
-npx create-next-app@latest .
+### Common Issues
+1. **Cannot install dependencies**
+   - Ensure you have Node.js installed (`>=14.0`).
+   - Run `node -v` and `npm -v` to verify installation.
 
-When prompted, choose the following options:
+2. **Application not starting**
+   - Check if the `next.config.js` file is configured correctly.
+   - Look for errors in the terminal and try `npm run dev` again.
 
-- Would you like to use TypeScript? Yes
-- Would you like to use ESLint? Yes
-- Would you like to use Tailwind CSS? No
-- Would you like to use `src/` directory? No
-- Would you like to use App Router? Yes
-- Would you like to customize the default import alias? No
+3. **API not responding**
+   - Verify that your API configuration is correct (API URL, method, headers, etc.).
+   - Use tools like Postman to test the API endpoints independently.
 
-Update the `package.json` file with the dependencies we specified earlier.
-Install the required dependencies:
+4. **ZIP file not generated**
+   - Ensure the `fs` and `archiver` modules are properly installed.
+   - Check server logs for errors related to file handling.
 
-npm install archiver
-npm install --save-dev @types/archiver
+## Contributing
 
-To serve the static HTML file, we need to make a small change to the Next.js configuration. Create a new file called `next.config.js` in the root of your project with the following conttent:
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/',
-        destination: '/page.html',
-      },
-    ];
-  },
-}
+We welcome contributions! To get started:
 
-module.exports = nextConfig
+1. Fork the repository.
+2. Create a new branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+3. Make your changes and commit them:
+   ```bash
+   git commit -m "Add your feature description"
+   ```
+4. Push the branch:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+5. Open a pull request and describe your changes.
 
-This configuration will serve the `page.html` file when accessing the root URL.
+## License
 
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
 
-npm run dev

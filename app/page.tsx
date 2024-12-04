@@ -1,11 +1,12 @@
-import PluginGeneratorForm from '@/components/PluginGeneratorForm'
+import type { NextPage } from 'next'
+import fs from 'fs'
+import path from 'path'
 
-export default function Home() {
-  return (
-    <main className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">API Plugin Generator</h1>
-      <PluginGeneratorForm />
-    </main>
-  )
+const Home: NextPage = () => {
+  const htmlFilePath = path.join(process.cwd(), 'public', 'page.html')
+  const htmlContent = fs.readFileSync(htmlFilePath, 'utf8')
+  
+  return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
 }
 
+export default Home
