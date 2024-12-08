@@ -95,7 +95,7 @@ The API Plugin Generator is a web application that allows users to easily create
 
 ### Generate Plugin
 - **URL**: `/api/generate-plugin`
-- **Method**: `POST`
+- **Method**: `GET`
 - **Request Body**:
   ```json
   {
@@ -110,7 +110,7 @@ The API Plugin Generator is a web application that allows users to easily create
 
 ### Test API
 - **URL**: `/api/test-api`
-- **Method**: `POST`
+- **Method**: `GET`
 - **Request Body**:
   ```json
   {
